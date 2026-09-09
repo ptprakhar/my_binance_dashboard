@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Binance Risk Guard</title>
   <style>
-    body { width: 320px; margin: 0; padding: 18px; font: 14px system-ui, sans-serif; background: #080b12; color: #eef2f7; }
+    body { width: 340px; margin: 0; padding: 18px; font: 14px system-ui, sans-serif; background: #080b12; color: #eef2f7; }
     h1 { font-size: 18px; margin: 0 0 14px; }
     .row { display:flex; justify-content:space-between; padding: 9px 0; border-bottom:1px solid #202a3a; }
     .muted { color:#8995a9; }
     .status { margin: 14px 0; padding: 10px; border-radius: 8px; background:#14271f; color:#5de0ac; font-weight:800; }
     .status.locked { background:#2b1419; color:#ff8794; }
-    select, button { width:100%; padding:10px; border-radius:8px; border:1px solid #344054; margin-top:9px; font:inherit; }
+    input, select, button { width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #344054; margin-top:9px; font:inherit; }
+    input, select { background:#0e1420; color:#eef2f7; }
     button { background:#eef2f7; color:#0a0d13; font-weight:800; cursor:pointer; }
     button.danger { background:#ff687b; color:#18070a; border-color:#ff687b; }
     #message { margin-top:10px; color:#8995a9; font-size:12px; min-height:16px; }
+    .section { margin-top:16px; padding-top:12px; border-top:1px solid #202a3a; }
   </style>
 </head>
 <body>
@@ -22,16 +24,26 @@
   <div class="row"><span class="muted">Daily P&L</span><strong id="pnl">—</strong></div>
   <div class="row"><span class="muted">Daily loss</span><strong id="loss">—</strong></div>
   <div class="row"><span class="muted">Trades</span><strong id="trades">—</strong></div>
+  <div class="row"><span class="muted">Max trade risk</span><strong id="maxRisk">—</strong></div>
   <div id="status" class="status">Checking dashboard…</div>
-  <label class="muted" for="duration">Cooldown duration</label>
-  <select id="duration">
-    <option value="900">15 minutes</option>
-    <option value="1800">30 minutes</option>
-    <option value="3600">1 hour</option>
-    <option value="7200">2 hours</option>
-    <option value="14400">4 hours</option>
-  </select>
-  <button id="activate" class="danger">ENABLE KILL SWITCH</button>
+
+  <div class="section">
+    <label class="muted" for="dashboardUrl">Dashboard URL</label>
+    <input id="dashboardUrl" placeholder="https://your-worker.example.com" autocomplete="off" />
+    <button id="saveDashboard">SAVE DASHBOARD</button>
+  </div>
+
+  <div class="section">
+    <label class="muted" for="duration">Cooldown duration</label>
+    <select id="duration">
+      <option value="900">15 minutes</option>
+      <option value="1800">30 minutes</option>
+      <option value="3600">1 hour</option>
+      <option value="7200">2 hours</option>
+      <option value="14400">4 hours</option>
+    </select>
+    <button id="activate" class="danger">ENABLE KILL SWITCH</button>
+  </div>
   <div id="message"></div>
   <script src="popup.js"></script>
 </body>
