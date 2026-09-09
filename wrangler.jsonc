@@ -3,6 +3,13 @@
   "name": "my-binance-dashboard",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-09-08",
+  "keep_vars": true,
+  "secrets": {
+    "required": [
+      "BINANCE_API_KEY",
+      "BINANCE_API_SECRET"
+    ]
+  },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",
