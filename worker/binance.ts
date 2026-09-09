@@ -93,7 +93,11 @@ async function signedRequest<T>(
 
   const response = await fetch(`${baseUrl}${path}?${query.toString()}`, {
     method: "GET",
-    headers: { "X-MBX-APIKEY": env.BINANCE_API_KEY, Accept: "application/json" },
+    headers: {
+      "X-MBX-APIKEY": env.BINANCE_API_KEY,
+      Accept: "application/json",
+      "User-Agent": "my-binance-dashboard/1.0",
+    },
   });
 
   const contentType = response.headers.get("content-type") ?? "unknown";
@@ -103,8 +107,10 @@ async function signedRequest<T>(
   try {
     body = JSON.parse(rawBody);
   } catch {
-    const preview = rawBody.replace(/\s+/g, " ").slice(0, 160);
-    throw new Error(`Binance returned non-JSON from ${path}: HTTP ${response.status}, content-type ${contentType}, body starts with ${JSON.stringify(preview)}`);
+    const preview = rawBody.replace(/\s+/g, " ").slice(0, 500);
+    throw new Error(
+      `Binance returned non-JSON from ${path}: HTTP ${response.status}, content-type ${contentType}, body starts with ${JSON.stringify(preview)}`,
+    );
   }
 
   if (!response.ok) {
