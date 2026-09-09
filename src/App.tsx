@@ -64,6 +64,7 @@ export default function App() {
   const positions = snapshot?.positions ?? [];
   const orders = snapshot?.openOrders ?? [];
   const account = snapshot?.account;
+  const dailyPnl = snapshot?.dailyPnl;
 
   return (
     <main className="app-shell">
@@ -98,6 +99,14 @@ export default function App() {
           <div className="muted">Across open Futures positions</div>
           <div className="metric-line"><span>Initial margin</span><strong>{account ? money(account.totalInitialMargin) : "—"}</strong></div>
           <div className="metric-line"><span>Open positions</span><strong>{positions.length}</strong></div>
+        </article>
+
+        <article className="card daily-pnl-card">
+          <div className="card-label">TODAY'S REALIZED P&L</div>
+          <div className={`hero-value ${pnlClass(dailyPnl?.net ?? 0)}`}>{dailyPnl ? money(dailyPnl.net) : "—"}</div>
+          <div className="muted">Net realized result since local midnight</div>
+          <div className="metric-line"><span>Realized P&L</span><strong>{dailyPnl ? money(dailyPnl.realizedPnl) : "—"}</strong></div>
+          <div className="metric-line"><span>Fees + funding</span><strong>{dailyPnl ? money(dailyPnl.commissions + dailyPnl.fundingFees) : "—"}</strong></div>
         </article>
 
         <article className="card status-card">
