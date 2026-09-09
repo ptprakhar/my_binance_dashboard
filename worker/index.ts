@@ -1,4 +1,4 @@
-import { getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
+import { getBinanceConnectivity, getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
 
 const DEPLOY_MARKER = "cloudflare-direct-binance-v2";
 
@@ -31,6 +31,20 @@ export default {
         deployment: DEPLOY_MARKER,
         timestamp: new Date().toISOString(),
       });
+    }
+
+    if (url.pathname === "/api/binance/connectivity" && request.method === "GET") {
+      try {
+        if (!hasBinanceCredentials(env)) {
+          return json({
+            error: "Binance credentials are not configured on this Worker.",
+            deployment: DEPLOY_MARKER,
+          }, 503);
+        }
+        return json(await getBinanceConnectivity(env));
+      } catch (error) {
+        return json({ deployment: DEPLOY_MARKER, error: errorMessage(error) }, 502);
+      }
     }
 
     if (url.pathname === "/api/binance/access" && request.method === "GET") {
