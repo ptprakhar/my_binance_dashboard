@@ -2,10 +2,9 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-// Binance credentials belong to the deployed Worker's runtime bindings.
-// Do not let Workers Builds expose them to the Vite build process, where the
-// Cloudflare Vite plugin can treat process.env secrets as deploy-time secrets.
-for (const name of ["BINANCE_API_KEY", "BINANCE_API_SECRET"]) {
+// Binance credentials belong to the Worker's runtime bindings. Do not let
+// Workers Builds expose them to the Vite build process.
+for (const name of ["BINANCE_API_KEY", "BINANCE_API_SECRET", "BINANCE_ED25519_PRIVATE_KEY", "BINANCE_FUTURES_BASE_URL"]) {
   delete process.env[name];
 }
 
