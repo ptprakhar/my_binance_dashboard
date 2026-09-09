@@ -9,6 +9,7 @@
     "https://*.workers.dev/*",
     "https://*.pages.dev/*"
   ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "action": {
     "default_title": "Binance Risk Guard",
     "default_popup": "popup.html"
