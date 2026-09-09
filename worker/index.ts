@@ -1,4 +1,5 @@
-import { getBinanceConnectivity, getBinanceReadAccess, getFuturesSnapshot, getRiskState, getRiskSymbol, type Env } from "./binance";
+import { getBinanceConnectivity, getBinanceReadAccess, getFuturesSnapshot, getRiskState, type Env } from "./binance";
+import { getMarketRiskSymbol } from "./risk-symbol";
 
 const DEPLOY_MARKER = "cloudflare-direct-binance-v2";
 
@@ -98,7 +99,7 @@ export default {
     if (url.pathname === "/api/risk-symbol" && request.method === "GET") {
       try {
         const symbol = url.searchParams.get("symbol") ?? "";
-        return json({ deployment: DEPLOY_MARKER, ...(await getRiskSymbol(symbol)) });
+        return json({ deployment: DEPLOY_MARKER, ...(await getMarketRiskSymbol(env, symbol)) });
       } catch (error) {
         return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 400);
       }
