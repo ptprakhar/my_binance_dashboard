@@ -1,6 +1,6 @@
 import { getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
 
-const DEPLOY_MARKER = "access-diagnostic-v2";
+const DEPLOY_MARKER = "futures-diagnostic-v1";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -50,7 +50,7 @@ export default {
           }, 503);
         }
 
-        return json(await getFuturesSnapshot(env));
+        return json({ deployment: DEPLOY_MARKER, ...(await getFuturesSnapshot(env)) });
       } catch (error) {
         return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 502);
       }
