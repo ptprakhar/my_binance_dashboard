@@ -1,6 +1,7 @@
 export type Env = {
   BINANCE_API_KEY?: string;
   BINANCE_API_SECRET?: string;
+  BINANCE_ED25519_PRIVATE_KEY?: string;
   BINANCE_FUTURES_BASE_URL?: string;
   ASSETS: Fetcher;
 };
@@ -68,6 +69,24 @@ function number(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizePem(value: string): string {
+  return value.trim().replace(/\\n/g, "\n");
+}
+
+function pemToDer(pem: string): ArrayBuffer {
+  const normalized = normalizePem(pem)
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
 async function hmacSha256(secret: string, message: string): Promise<string> {
   const keyData = new TextEncoder().encode(secret);
   const messageData = new TextEncoder().encode(message);
@@ -76,19 +95,42 @@ async function hmacSha256(secret: string, message: string): Promise<string> {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function ed25519Sign(privateKeyPem: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToDer(privateKeyPem),
+    { name: "Ed25519" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(message));
+
+  let binary = "";
+  for (const byte of new Uint8Array(signature)) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 async function signedRequest<T>(
   env: Env,
   baseUrl: string,
   path: string,
   params: Record<string, string> = {},
 ): Promise<T> {
-  if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
-    throw new Error("Binance API credentials are not configured on this Worker.");
+  if (!env.BINANCE_API_KEY) {
+    throw new Error("BINANCE_API_KEY is not configured on this Worker.");
+  }
+  if (!env.BINANCE_ED25519_PRIVATE_KEY && !env.BINANCE_API_SECRET) {
+    throw new Error("Configure BINANCE_ED25519_PRIVATE_KEY on this Worker.");
   }
 
   const timestamp = Date.now().toString();
   const query = new URLSearchParams({ ...params, recvWindow: "10000", timestamp });
-  const signature = await hmacSha256(env.BINANCE_API_SECRET, query.toString());
+  const payload = query.toString();
+  const signature = env.BINANCE_ED25519_PRIVATE_KEY
+    ? await ed25519Sign(env.BINANCE_ED25519_PRIVATE_KEY, payload)
+    : await hmacSha256(env.BINANCE_API_SECRET!, payload);
   query.set("signature", signature);
 
   const response = await fetch(`${baseUrl}${path}?${query.toString()}`, {
