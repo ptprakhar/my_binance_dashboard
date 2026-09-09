@@ -1,5 +1,6 @@
 const SUPPORTED_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT", "BTCUSDC", "ETHUSDC"]);
-const POLL_MS = 1800;
+const RISK_REFRESH_MS = 10000;
+const SIZE_REFRESH_MS = 1800;
 const state = {
   risk: null,
   cooldownUntil: null,
@@ -7,7 +8,6 @@ const state = {
   symbol: null,
   market: null,
   lastAutoQuantity: null,
-  lastSignature: "",
   lastMarketFetch: 0,
 };
 
@@ -53,14 +53,7 @@ function findSelectedMarketTab() {
 }
 
 function isMarketOrder() {
-  if (findSelectedMarketTab()) return true;
-  const nodes = [...document.querySelectorAll("button,[role='tab'],div[role='button']")];
-  const market = nodes.find((node) => (node.innerText || node.textContent || "").trim().toLowerCase() === "market");
-  if (!market) return false;
-  const parent = market.parentElement;
-  const siblings = parent ? [...parent.children] : [];
-  const index = siblings.indexOf(market);
-  return index >= 0 && /active|selected/.test(String(market.className || "").toLowerCase());
+  return Boolean(findSelectedMarketTab());
 }
 
 function detectSymbol() {
@@ -203,10 +196,9 @@ async function updateSizing() {
     const riskAtSafeQty = distance * safeQty;
     const currentQty = Number(String(quantityInput.value).replace(/,/g, ""));
     const tooLarge = currentQty > 0 && currentQty > safeQty + step / 2;
-    const signature = `${symbol}|${entry}|${sl}|${safeQty}|${state.risk?.maxLossPerTradeAmount}`;
+    const currentIsAuto = state.lastAutoQuantity !== null && Math.abs(currentQty - state.lastAutoQuantity) < Math.max(step / 2, 1e-12);
 
     if (safeQty > 0 && safeQty <= Number(market.maxQty || Infinity)) {
-      const currentIsAuto = state.lastAutoQuantity !== null && Math.abs(currentQty - state.lastAutoQuantity) < Math.max(step / 2, 1e-12);
       if (!currentQty || currentIsAuto) {
         setNativeInputValue(quantityInput, String(safeQty));
         state.lastAutoQuantity = safeQty;
@@ -231,14 +223,12 @@ async function updateSizing() {
       `<span style="color:${sideRule ? color : "#ef4444"}">${sideRule ? status : "🔴 SL IS ON THE WRONG SIDE"}</span>`,
       sideRule && !tooLarge,
     );
-
-    if (signature !== state.lastSignature) state.lastSignature = signature;
   } catch (error) {
     renderPanel(`🔴 <strong>Risk Guard</strong><br>${error instanceof Error ? error.message : "Sizing failed."}`, false);
   }
 }
 
-async function tick() {
+async function initialLoad() {
   try {
     await refreshRisk();
     await updateSizing();
@@ -253,12 +243,16 @@ const observer = new MutationObserver(() => {
   clearTimeout(observer.timer);
   observer.timer = setTimeout(() => updateSizing(), 250);
 });
-observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected", "data-state"] });
+observer.observe(document.documentElement, { childList: true, subtree: true });
 
 document.addEventListener("input", () => updateSizing(), true);
 document.addEventListener("change", () => updateSizing(), true);
 
-// V1 sizing is advisory + quantity autofill. We intentionally do not intercept the Buy/Sell click yet.
-// This lets us validate Binance's live DOM selectors without creating a false sense of order blocking.
-tick();
-setInterval(tick, POLL_MS);
+initialLoad();
+setInterval(() => refreshRisk().catch(() => {
+  state.verified = false;
+  document.documentElement.dataset.binanceRiskLock = "locked";
+}), RISK_REFRESH_MS);
+setInterval(() => updateSizing(), SIZE_REFRESH_MS);
+
+// V1 sizing is advisory + quantity autofill. Buy/Sell click interception remains disabled until live DOM testing.
