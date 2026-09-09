@@ -32,6 +32,10 @@ h2 { margin: 4px 0 0; font-size: 23px; letter-spacing: -.025em; }
 .positive { color: #38d39f; } .negative { color: #ff687b; } .neutral { color: #d9e0ea; }
 .metric-line { display: flex; justify-content: space-between; border-top: 1px solid #202a3a; padding-top: 11px; margin-top: 12px; color: #8b97ab; font-size: 13px; }
 .metric-line strong { color: #e8edf4; }
+.daily-result { font-size: 11px; font-weight: 900; letter-spacing: .08em; margin: 5px 0 4px; }
+.daily-limit { margin-top: 13px; padding: 8px 10px; border-radius: 8px; font-size: 10px; font-weight: 900; letter-spacing: .07em; text-align: center; }
+.daily-limit.within { border: 1px solid #36523f; background: #14271f; color: #5de0ac; }
+.daily-limit.breached { border: 1px solid #5a2730; background: #2b1419; color: #ff8794; }
 .status-pill { display: inline-block; margin: 19px 0 13px; border: 1px solid #36523f; background: #14271f; color: #5de0ac; padding: 7px 10px; border-radius: 999px; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
 .status-card p { color: #b5becc; line-height: 1.5; font-size: 13px; max-width: 260px; }
 .small { font-size: 12px; }
