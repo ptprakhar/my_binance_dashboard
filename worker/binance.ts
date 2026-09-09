@@ -33,7 +33,35 @@ type BinanceOrder = {
   status: string;
 };
 
+type BinanceApiRestrictions = {
+  ipRestrict?: boolean;
+  enableReading?: boolean;
+  enableWithdrawals?: boolean;
+  enableInternalTransfer?: boolean;
+  enableMargin?: boolean;
+  enableFutures?: boolean;
+  permitsUniversalTransfer?: boolean;
+  enableVanillaOptions?: boolean;
+  enableFixApiTrade?: boolean;
+  enableFixReadOnly?: boolean;
+  enableSpotAndMarginTrading?: boolean;
+  enablePortfolioMarginTrading?: boolean;
+};
+
+type BinanceAccountInfo = {
+  vipLevel?: number;
+  isMarginEnabled?: boolean;
+  isFutureEnabled?: boolean;
+  isOptionsEnabled?: boolean;
+  isPortfolioMarginRetailEnabled?: boolean;
+};
+
+type BinanceAccountStatus = {
+  data?: string;
+};
+
 const DEFAULT_BASE_URL = "https://fapi.binance.com";
+const BINANCE_GENERAL_BASE_URL = "https://api.binance.com";
 
 function number(value: string | number | undefined): number {
   const parsed = Number(value ?? 0);
@@ -48,7 +76,12 @@ async function hmacSha256(secret: string, message: string): Promise<string> {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function signedRequest<T>(env: Env, path: string, params: Record<string, string> = {}): Promise<T> {
+async function signedRequest<T>(
+  env: Env,
+  baseUrl: string,
+  path: string,
+  params: Record<string, string> = {},
+): Promise<T> {
   if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
     throw new Error("Binance API credentials are not configured on this Worker.");
   }
@@ -58,7 +91,7 @@ async function signedRequest<T>(env: Env, path: string, params: Record<string, s
   const signature = await hmacSha256(env.BINANCE_API_SECRET, query.toString());
   query.set("signature", signature);
 
-  const response = await fetch(`${env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL}${path}?${query.toString()}`, {
+  const response = await fetch(`${baseUrl}${path}?${query.toString()}`, {
     method: "GET",
     headers: { "X-MBX-APIKEY": env.BINANCE_API_KEY, Accept: "application/json" },
   });
@@ -71,11 +104,47 @@ async function signedRequest<T>(env: Env, path: string, params: Record<string, s
   return body as T;
 }
 
+export async function getBinanceReadAccess(env: Env) {
+  const [permissions, accountInfo, accountStatus] = await Promise.all([
+    signedRequest<BinanceApiRestrictions>(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/apiRestrictions"),
+    signedRequest<BinanceAccountInfo>(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/info"),
+    signedRequest<BinanceAccountStatus>(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/status"),
+  ]);
+
+  return {
+    api: "Binance General REST API",
+    permissions: {
+      ipRestrict: Boolean(permissions.ipRestrict),
+      enableReading: Boolean(permissions.enableReading),
+      enableFutures: Boolean(permissions.enableFutures),
+      enableSpotAndMarginTrading: Boolean(permissions.enableSpotAndMarginTrading),
+      enableWithdrawals: Boolean(permissions.enableWithdrawals),
+      enableInternalTransfer: Boolean(permissions.enableInternalTransfer),
+      permitsUniversalTransfer: Boolean(permissions.permitsUniversalTransfer),
+      enableMargin: Boolean(permissions.enableMargin),
+      enableVanillaOptions: Boolean(permissions.enableVanillaOptions),
+      enableFixApiTrade: Boolean(permissions.enableFixApiTrade),
+      enableFixReadOnly: Boolean(permissions.enableFixReadOnly),
+      enablePortfolioMarginTrading: Boolean(permissions.enablePortfolioMarginTrading),
+    },
+    account: {
+      status: accountStatus.data ?? "unknown",
+      vipLevel: number(accountInfo.vipLevel),
+      marginEnabled: Boolean(accountInfo.isMarginEnabled),
+      futuresEnabledOnAccount: Boolean(accountInfo.isFutureEnabled),
+      optionsEnabled: Boolean(accountInfo.isOptionsEnabled),
+      portfolioMarginEnabled: Boolean(accountInfo.isPortfolioMarginRetailEnabled),
+    },
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export async function getFuturesSnapshot(env: Env) {
+  const baseUrl = env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL;
   const [account, positions, openOrders] = await Promise.all([
-    signedRequest<BinanceAccount>(env, "/fapi/v2/account"),
-    signedRequest<BinancePosition[]>(env, "/fapi/v2/positionRisk"),
-    signedRequest<BinanceOrder[]>(env, "/fapi/v1/openOrders"),
+    signedRequest<BinanceAccount>(env, baseUrl, "/fapi/v2/account"),
+    signedRequest<BinancePosition[]>(env, baseUrl, "/fapi/v2/positionRisk"),
+    signedRequest<BinanceOrder[]>(env, baseUrl, "/fapi/v1/openOrders"),
   ]);
 
   return {
