@@ -20,6 +20,12 @@ function hasBinanceCredentials(env: Env): boolean {
   return Boolean(env.BINANCE_API_KEY && (env.BINANCE_ED25519_PRIVATE_KEY || env.BINANCE_API_SECRET));
 }
 
+function optionalTimestamp(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -68,7 +74,9 @@ export default {
           }, 503);
         }
 
-        return json({ deployment: DEPLOY_MARKER, ...(await getFuturesSnapshot(env)) });
+        const startTime = optionalTimestamp(url.searchParams.get("startTime"));
+        const endTime = optionalTimestamp(url.searchParams.get("endTime"));
+        return json({ deployment: DEPLOY_MARKER, ...(await getFuturesSnapshot(env, startTime, endTime)) });
       } catch (error) {
         return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 502);
       }
