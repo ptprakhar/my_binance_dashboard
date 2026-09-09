@@ -6,13 +6,6 @@ export type Env = {
 };
 
 type BinanceAccount = {
-  assets?: Array<{
-    asset: string;
-    walletBalance: string;
-    availableBalance: string;
-    marginBalance: string;
-    unrealizedProfit: string;
-  }>;
   totalWalletBalance?: string;
   availableBalance?: string;
   totalMarginBalance?: string;
@@ -47,29 +40,15 @@ function number(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function encode(value: string): string {
-  return encodeURIComponent(value);
-}
-
 async function hmacSha256(secret: string, message: string): Promise<string> {
   const keyData = new TextEncoder().encode(secret);
   const messageData = new TextEncoder().encode(message);
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+  const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, messageData);
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function signedRequest<T>(
-  env: Env,
-  path: string,
-  params: Record<string, string> = {},
-): Promise<T> {
+async function signedRequest<T>(env: Env, path: string, params: Record<string, string> = {}): Promise<T> {
   if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
     throw new Error("Binance API credentials are not configured on this Worker.");
   }
@@ -81,10 +60,7 @@ async function signedRequest<T>(
 
   const response = await fetch(`${env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL}${path}?${query.toString()}`, {
     method: "GET",
-    headers: {
-      "X-MBX-APIKEY": env.BINANCE_API_KEY,
-      Accept: "application/json",
-    },
+    headers: { "X-MBX-APIKEY": env.BINANCE_API_KEY, Accept: "application/json" },
   });
 
   const body = (await response.json()) as T | { code?: number; msg?: string };
@@ -92,7 +68,6 @@ async function signedRequest<T>(
     const message = typeof body === "object" && body && "msg" in body ? body.msg : undefined;
     throw new Error(message || `Binance API request failed (${response.status}).`);
   }
-
   return body as T;
 }
 
