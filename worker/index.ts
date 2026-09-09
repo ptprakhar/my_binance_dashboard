@@ -1,6 +1,11 @@
-import { getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
+import type { Env as BinanceEnv } from "./binance";
 
-const DEPLOY_MARKER = "ed25519-credentials-v1";
+type Env = BinanceEnv & {
+  BINANCE_PROXY_URL?: string;
+  BINANCE_PROXY_TOKEN?: string;
+};
+
+const DEPLOY_MARKER = "fixed-ip-backend-v1";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -16,8 +21,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected server error.";
 }
 
-function hasBinanceCredentials(env: Env): boolean {
-  return Boolean(env.BINANCE_API_KEY && (env.BINANCE_ED25519_PRIVATE_KEY || env.BINANCE_API_SECRET));
+function hasProxyConfig(env: Env): boolean {
+  return Boolean(env.BINANCE_PROXY_URL && env.BINANCE_PROXY_TOKEN);
+}
+
+async function proxyGet(env: Env, path: string): Promise<Response> {
+  if (!hasProxyConfig(env)) {
+    return json({
+      error: "Binance backend is not configured. Add BINANCE_PROXY_URL and BINANCE_PROXY_TOKEN as Worker secrets.",
+      mode: "not_configured",
+      deployment: DEPLOY_MARKER,
+    }, 503);
+  }
+
+  const baseUrl = env.BINANCE_PROXY_URL!.replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${env.BINANCE_PROXY_TOKEN}`,
+      Accept: "application/json",
+    },
+  });
+
+  const contentType = response.headers.get("content-type") ?? "application/json";
+  const body = await response.text();
+
+  return new Response(body, {
+    status: response.status,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }
 
 export default {
@@ -29,16 +64,16 @@ export default {
         ok: true,
         service: "binance-risk-dashboard",
         deployment: DEPLOY_MARKER,
+        backendConfigured: hasProxyConfig(env),
         timestamp: new Date().toISOString(),
       });
     }
 
     if (url.pathname === "/api/binance/access" && request.method === "GET") {
       try {
-        if (!hasBinanceCredentials(env)) {
-          return json({ error: "Binance credentials are not configured on this Worker.", deployment: DEPLOY_MARKER }, 503);
-        }
-        return json({ deployment: DEPLOY_MARKER, ...(await getBinanceReadAccess(env)) });
+        const response = await proxyGet(env, "/binance/access");
+        const body = await response.json().catch(() => ({ error: "Backend returned invalid JSON." }));
+        return json({ deployment: DEPLOY_MARKER, ...(body as object) }, response.status);
       } catch (error) {
         return json({ deployment: DEPLOY_MARKER, error: errorMessage(error) }, 502);
       }
@@ -46,17 +81,11 @@ export default {
 
     if (url.pathname === "/api/binance/futures" && request.method === "GET") {
       try {
-        if (!hasBinanceCredentials(env)) {
-          return json({
-            error: "Binance is not configured yet. Add BINANCE_API_KEY and BINANCE_ED25519_PRIVATE_KEY as Worker secrets.",
-            mode: "not_configured",
-            deployment: DEPLOY_MARKER,
-          }, 503);
-        }
-
-        return json({ deployment: DEPLOY_MARKER, ...(await getFuturesSnapshot(env)) });
+        const response = await proxyGet(env, "/binance/futures");
+        const body = await response.json().catch(() => ({ error: "Backend returned invalid JSON." }));
+        return json({ deployment: DEPLOY_MARKER, ...(body as object) }, response.status);
       } catch (error) {
-        return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 502);
+        return json({ deployment: DEPLOY_MARKER, error: errorMessage(error) }, 502);
       }
     }
 
