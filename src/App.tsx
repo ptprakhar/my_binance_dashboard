@@ -65,6 +65,18 @@ export default function App() {
   const orders = snapshot?.openOrders ?? [];
   const account = snapshot?.account;
   const dailyPnl = snapshot?.dailyPnl;
+  const dailyPnlPercent = account && dailyPnl && account.walletBalance > 0
+    ? (dailyPnl.net / account.walletBalance) * 100
+    : null;
+  const dailyLossPercent = dailyPnlPercent !== null ? Math.max(0, -dailyPnlPercent) : null;
+  const dailyLimitBreached = dailyLossPercent !== null && dailyLossPercent >= 4.5;
+  const dailyResultLabel = dailyPnl
+    ? dailyPnl.net > 0
+      ? "PROFIT TODAY"
+      : dailyPnl.net < 0
+        ? "LOSS TODAY"
+        : "BREAK-EVEN TODAY"
+    : "TODAY'S RESULT";
 
   return (
     <main className="app-shell">
@@ -104,9 +116,13 @@ export default function App() {
         <article className="card daily-pnl-card">
           <div className="card-label">TODAY'S REALIZED P&L</div>
           <div className={`hero-value ${pnlClass(dailyPnl?.net ?? 0)}`}>{dailyPnl ? money(dailyPnl.net) : "—"}</div>
-          <div className="muted">Net realized result since local midnight</div>
-          <div className="metric-line"><span>Realized P&L</span><strong>{dailyPnl ? money(dailyPnl.realizedPnl) : "—"}</strong></div>
-          <div className="metric-line"><span>Fees + funding</span><strong>{dailyPnl ? money(dailyPnl.commissions + dailyPnl.fundingFees) : "—"}</strong></div>
+          <div className={`daily-result ${pnlClass(dailyPnl?.net ?? 0)}`}>{dailyResultLabel}</div>
+          <div className="metric-line"><span>Account impact</span><strong>{dailyPnlPercent !== null ? `${dailyPnlPercent >= 0 ? "+" : ""}${dailyPnlPercent.toFixed(2)}%` : "—"}</strong></div>
+          <div className="metric-line"><span>{dailyPnl?.net && dailyPnl.net < 0 ? "Daily loss limit" : "Realized P&L"}</span><strong>{dailyPnl?.net && dailyPnl.net < 0 ? `${dailyLossPercent?.toFixed(2)}% / 4.50%` : dailyPnl ? money(dailyPnl.realizedPnl) : "—"}</strong></div>
+          <div className={`daily-limit ${dailyLimitBreached ? "breached" : "within"}`}>
+            {dailyLimitBreached ? "DAILY LOSS LIMIT EXCEEDED" : "WITHIN 4.5% DAILY LOSS LIMIT"}
+          </div>
+          <div className="muted small">Binance realized result from local midnight; % is measured against current wallet balance.</div>
         </article>
 
         <article className="card status-card">
