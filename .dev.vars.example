@@ -1,0 +1,10 @@
+# Local Wrangler runtime variables.
+# Copy this file to .dev.vars and replace the placeholders.
+# .dev.vars is gitignored and must never be committed.
+
+BINANCE_API_KEY="your-binance-api-key"
+BINANCE_ED25519_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-pkcs8-ed25519-private-key\n-----END PRIVATE KEY-----"
+# Optional HMAC fallback:
+# BINANCE_API_SECRET="your-binance-api-secret"
+
+BINANCE_FUTURES_BASE_URL="https://fapi.binance.com"
