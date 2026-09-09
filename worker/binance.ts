@@ -34,6 +34,15 @@ type BinanceOrder = {
   status: string;
 };
 
+type BinanceIncome = {
+  symbol: string;
+  incomeType: string;
+  income: string;
+  asset: string;
+  time: number;
+  info?: string;
+};
+
 type BinanceApiRestrictions = {
   ipRestrict?: boolean;
   enableReading?: boolean;
@@ -149,9 +158,6 @@ async function signedRequest<T>(
     : await hmacSha256(env.BINANCE_API_SECRET!, payload);
   query.set("signature", signature);
 
-  // Keep the upstream request deliberately minimal. Binance requires the API key
-  // header for signed REST calls; avoid adding custom headers that can affect an
-  // upstream CloudFront/WAF cache or request policy.
   const response = await fetch(`${baseUrl}${path}?${query.toString()}`, {
     method: "GET",
     headers: {
@@ -216,9 +222,6 @@ async function probeSigned(env: Env, baseUrl: string, path: string) {
 
 export async function getBinanceConnectivity(env: Env) {
   const futuresBaseUrl = env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL;
-
-  // Run independently and sequentially so one blocked upstream request cannot
-  // obscure the result of the others or look like a request burst to the edge.
   const futuresPublicTime = await publicRequest(futuresBaseUrl, "/fapi/v1/time");
   const generalPublicTime = await publicRequest(BINANCE_GENERAL_BASE_URL, "/api/v3/time");
   const generalSigned = await probeSigned(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/apiRestrictions");
@@ -279,13 +282,31 @@ export async function getBinanceReadAccess(env: Env) {
   };
 }
 
-export async function getFuturesSnapshot(env: Env) {
+export async function getFuturesSnapshot(env: Env, startTime?: number, endTime?: number) {
   const baseUrl = env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL;
-  const [account, positions, openOrders] = await Promise.all([
+  const [account, positions, openOrders, income] = await Promise.all([
     signedRequest<BinanceAccount>(env, baseUrl, "/fapi/v2/account"),
     signedRequest<BinancePosition[]>(env, baseUrl, "/fapi/v2/positionRisk"),
     signedRequest<BinanceOrder[]>(env, baseUrl, "/fapi/v1/openOrders"),
+    startTime !== undefined
+      ? signedRequest<BinanceIncome[]>(env, baseUrl, "/fapi/v1/income", {
+          startTime: String(startTime),
+          ...(endTime !== undefined ? { endTime: String(endTime) } : {}),
+          limit: "1000",
+        })
+      : Promise.resolve([] as BinanceIncome[]),
   ]);
+
+  const realizedPnl = income
+    .filter((entry) => entry.incomeType === "REALIZED_PNL")
+    .reduce((sum, entry) => sum + number(entry.income), 0);
+  const commissions = income
+    .filter((entry) => entry.incomeType === "COMMISSION")
+    .reduce((sum, entry) => sum + number(entry.income), 0);
+  const fundingFees = income
+    .filter((entry) => entry.incomeType === "FUNDING_FEE")
+    .reduce((sum, entry) => sum + number(entry.income), 0);
+  const dailyPnl = realizedPnl + commissions + fundingFees;
 
   return {
     account: {
@@ -294,6 +315,14 @@ export async function getFuturesSnapshot(env: Env) {
       marginBalance: number(account.totalMarginBalance),
       unrealizedPnl: number(account.totalUnrealizedProfit),
       totalInitialMargin: number(account.totalInitialMargin),
+    },
+    dailyPnl: {
+      net: dailyPnl,
+      realizedPnl,
+      commissions,
+      fundingFees,
+      startTime: startTime ?? null,
+      endTime: endTime ?? null,
     },
     positions: positions
       .map((position) => {
