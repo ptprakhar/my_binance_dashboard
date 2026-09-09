@@ -19,6 +19,15 @@ export type OpenOrder = {
   status: string;
 };
 
+export type DailyPnl = {
+  net: number;
+  realizedPnl: number;
+  commissions: number;
+  fundingFees: number;
+  startTime: number | null;
+  endTime: number | null;
+};
+
 export type FuturesSnapshot = {
   account: {
     walletBalance: number;
@@ -27,6 +36,7 @@ export type FuturesSnapshot = {
     unrealizedPnl: number;
     totalInitialMargin: number;
   };
+  dailyPnl: DailyPnl;
   positions: Position[];
   openOrders: OpenOrder[];
   serverTime: number;
