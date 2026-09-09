@@ -1,4 +1,4 @@
-import { getFuturesSnapshot, type Env } from "./binance";
+import { getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -20,6 +20,17 @@ export default {
 
     if (url.pathname === "/api/health") {
       return json({ ok: true, service: "binance-risk-dashboard", timestamp: new Date().toISOString() });
+    }
+
+    if (url.pathname === "/api/binance/access" && request.method === "GET") {
+      try {
+        if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
+          return json({ error: "Binance credentials are not configured on this Worker." }, 503);
+        }
+        return json(await getBinanceReadAccess(env));
+      } catch (error) {
+        return json({ error: errorMessage(error) }, 502);
+      }
     }
 
     if (url.pathname === "/api/binance/futures" && request.method === "GET") {
