@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:local": "npm run build && wrangler dev",
     "build": "node scripts/build-cloudflare.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
