@@ -1,6 +1,6 @@
 import { getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
 
-const DEPLOY_MARKER = "futures-diagnostic-v1";
+const DEPLOY_MARKER = "ed25519-credentials-v1";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -14,6 +14,10 @@ function json(data: unknown, status = 200): Response {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected server error.";
+}
+
+function hasBinanceCredentials(env: Env): boolean {
+  return Boolean(env.BINANCE_API_KEY && (env.BINANCE_ED25519_PRIVATE_KEY || env.BINANCE_API_SECRET));
 }
 
 export default {
@@ -31,7 +35,7 @@ export default {
 
     if (url.pathname === "/api/binance/access" && request.method === "GET") {
       try {
-        if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
+        if (!hasBinanceCredentials(env)) {
           return json({ error: "Binance credentials are not configured on this Worker.", deployment: DEPLOY_MARKER }, 503);
         }
         return json({ deployment: DEPLOY_MARKER, ...(await getBinanceReadAccess(env)) });
@@ -42,9 +46,9 @@ export default {
 
     if (url.pathname === "/api/binance/futures" && request.method === "GET") {
       try {
-        if (!env.BINANCE_API_KEY || !env.BINANCE_API_SECRET) {
+        if (!hasBinanceCredentials(env)) {
           return json({
-            error: "Binance is not configured yet. Add BINANCE_API_KEY and BINANCE_API_SECRET as Worker secrets.",
+            error: "Binance is not configured yet. Add BINANCE_API_KEY and BINANCE_ED25519_PRIVATE_KEY as Worker secrets.",
             mode: "not_configured",
             deployment: DEPLOY_MARKER,
           }, 503);
