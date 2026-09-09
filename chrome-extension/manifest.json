@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Binance Risk Guard",
+  "version": "0.1.0",
+  "description": "Personal Binance Futures risk guard. Reads risk state from the dashboard and provides a visible cooldown control.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://YOUR-DASHBOARD-DOMAIN/*"],
+  "action": {
+    "default_title": "Binance Risk Guard",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.binance.com/*", "https://binance.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
