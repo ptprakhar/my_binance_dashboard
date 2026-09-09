@@ -72,6 +72,7 @@ type BinanceAccountStatus = {
 
 const DEFAULT_BASE_URL = "https://fapi.binance.com";
 const BINANCE_GENERAL_BASE_URL = "https://api.binance.com";
+const RISK_GUARD_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT", "BTCUSDC", "ETHUSDC"]);
 
 function number(value: string | number | undefined): number {
   const parsed = Number(value ?? 0);
@@ -209,6 +210,14 @@ async function publicRequest(baseUrl: string, path: string) {
     contentType,
     body: response.ok ? body : typeof body === "string" ? body : body,
   };
+}
+
+async function publicJsonRequest<T>(baseUrl: string, path: string): Promise<T> {
+  const result = await publicRequest(baseUrl, path);
+  if (!result.ok) {
+    throw new Error(`Binance public market data failed (${result.status}).`);
+  }
+  return result.body as T;
 }
 
 async function probeSigned(env: Env, baseUrl: string, path: string) {
@@ -352,5 +361,112 @@ export async function getFuturesSnapshot(env: Env, startTime?: number, endTime?:
     serverTime: Date.now(),
     fetchedAt: new Date().toISOString(),
     mode: "live" as const,
+  };
+}
+
+type BinanceUserTrade = {
+  orderId: number;
+  time: number;
+};
+
+type BinanceExchangeInfo = {
+  symbols?: Array<{
+    symbol?: string;
+    status?: string;
+    baseAsset?: string;
+    quoteAsset?: string;
+    filters?: Array<{
+      filterType?: string;
+      minQty?: string;
+      maxQty?: string;
+      stepSize?: string;
+      tickSize?: string;
+      minPrice?: string;
+      maxPrice?: string;
+      minNotional?: string;
+    }>;
+  }>;
+};
+
+type BinanceMarkPrice = {
+  symbol?: string;
+  markPrice?: string;
+  indexPrice?: string;
+  time?: number;
+};
+
+export async function getRiskState(env: Env, startTime?: number, endTime?: number) {
+  const end = endTime ?? Date.now();
+  const start = startTime ?? new Date(new Date(end).setHours(0, 0, 0, 0)).getTime();
+  const snapshot = await getFuturesSnapshot(env, start, end);
+  const baseUrl = env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL;
+  const symbols = [...RISK_GUARD_SYMBOLS];
+  const tradesBySymbol = await Promise.all(
+    symbols.map((symbol) => signedRequest<BinanceUserTrade[]>(env, baseUrl, "/fapi/v1/userTrades", {
+      symbol,
+      startTime: String(start),
+      endTime: String(end),
+      limit: "1000",
+    })),
+  );
+  const orderIds = new Set<number>();
+  tradesBySymbol.flat().forEach((trade) => orderIds.add(trade.orderId));
+
+  const walletBalance = snapshot.account.walletBalance;
+  const dailyPnlPercent = walletBalance > 0 ? (snapshot.dailyPnl.net / walletBalance) * 100 : 0;
+  const dailyLossPercent = Math.max(0, -dailyPnlPercent);
+  const maxLossPerTradePercent = 1.5;
+  const maxLossPerTradeAmount = walletBalance * (maxLossPerTradePercent / 100);
+
+  return {
+    walletBalance,
+    availableBalance: snapshot.account.availableBalance,
+    dailyPnl: snapshot.dailyPnl.net,
+    dailyPnlPercent,
+    dailyLossPercent,
+    maxDailyLossPercent: 4.5,
+    maxLossPerTradePercent,
+    maxLossPerTradeAmount,
+    tradesToday: orderIds.size,
+    maxTrades: 5,
+    status: dailyLossPercent >= 4.5 ? "DAILY_LOSS_LIMIT_EXCEEDED" : orderIds.size >= 5 ? "TRADE_LIMIT_REACHED" : "OK",
+    startTime: start,
+    endTime: end,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+export async function getRiskSymbol(symbol: string) {
+  const normalized = symbol.toUpperCase();
+  if (!RISK_GUARD_SYMBOLS.has(normalized)) {
+    throw new Error(`Unsupported risk-guard symbol: ${normalized}.`);
+  }
+
+  const [markPrice, exchangeInfo] = await Promise.all([
+    publicJsonRequest<BinanceMarkPrice>(DEFAULT_BASE_URL, `/fapi/v1/premiumIndex?symbol=${encodeURIComponent(normalized)}`),
+    publicJsonRequest<BinanceExchangeInfo>(DEFAULT_BASE_URL, `/fapi/v1/exchangeInfo?symbol=${encodeURIComponent(normalized)}`),
+  ]);
+  const symbolInfo = exchangeInfo.symbols?.find((entry) => entry.symbol === normalized);
+  const lotSize = symbolInfo?.filters?.find((filter) => filter.filterType === "LOT_SIZE");
+  const priceFilter = symbolInfo?.filters?.find((filter) => filter.filterType === "PRICE_FILTER");
+  const minNotional = symbolInfo?.filters?.find((filter) => filter.filterType === "MIN_NOTIONAL");
+
+  if (!symbolInfo || !lotSize?.stepSize) {
+    throw new Error(`Binance trading rules are unavailable for ${normalized}.`);
+  }
+
+  return {
+    symbol: normalized,
+    status: symbolInfo.status ?? "UNKNOWN",
+    baseAsset: symbolInfo.baseAsset ?? null,
+    quoteAsset: symbolInfo.quoteAsset ?? null,
+    markPrice: number(markPrice.markPrice),
+    indexPrice: number(markPrice.indexPrice),
+    stepSize: number(lotSize.stepSize),
+    minQty: number(lotSize.minQty),
+    maxQty: number(lotSize.maxQty),
+    tickSize: number(priceFilter?.tickSize),
+    minNotional: number(minNotional?.minNotional),
+    fetchedAt: new Date().toISOString(),
   };
 }
