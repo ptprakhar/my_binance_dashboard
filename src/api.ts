@@ -1,7 +1,15 @@
 import type { FuturesSnapshot } from "./types";
 
 export async function fetchFuturesSnapshot(signal?: AbortSignal): Promise<FuturesSnapshot> {
-  const response = await fetch("/api/binance/futures", {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const endTime = now.getTime();
+  const params = new URLSearchParams({
+    startTime: String(startOfDay),
+    endTime: String(endTime),
+  });
+
+  const response = await fetch(`/api/binance/futures?${params.toString()}`, {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
