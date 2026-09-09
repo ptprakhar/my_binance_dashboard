@@ -10,7 +10,7 @@ const initialRules = [
 ];
 
 function money(value: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USDT", maximumFractionDigits: 2 }).format(value);
+  return `${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value)} USDT`;
 }
 
 function price(value: number): string {
