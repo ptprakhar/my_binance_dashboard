@@ -91,7 +91,7 @@ function pemToDer(pem: string): ArrayBuffer {
 
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 !== 0) {
     throw new Error(
-      `BINANCE_ED25519_PRIVATE_KEY contains invalid PEM base64 data. Check that the complete private-key block was pasted into the Worker secret, including BEGIN/END lines, with no extra characters.`,
+      "BINANCE_ED25519_PRIVATE_KEY contains invalid PEM base64 data. Check that the complete private-key block was pasted into the Worker secret, including BEGIN/END lines, with no extra characters.",
     );
   }
 
@@ -149,13 +149,15 @@ async function signedRequest<T>(
     : await hmacSha256(env.BINANCE_API_SECRET!, payload);
   query.set("signature", signature);
 
+  // Keep the upstream request deliberately minimal. Binance requires the API key
+  // header for signed REST calls; avoid adding custom headers that can affect an
+  // upstream CloudFront/WAF cache or request policy.
   const response = await fetch(`${baseUrl}${path}?${query.toString()}`, {
     method: "GET",
     headers: {
       "X-MBX-APIKEY": env.BINANCE_API_KEY,
-      Accept: "application/json",
-      "User-Agent": "my-binance-dashboard/1.0",
     },
+    cache: "no-store",
   });
 
   const contentType = response.headers.get("content-type") ?? "unknown";
