@@ -96,11 +96,24 @@ async function signedRequest<T>(
     headers: { "X-MBX-APIKEY": env.BINANCE_API_KEY, Accept: "application/json" },
   });
 
-  const body = (await response.json()) as T | { code?: number; msg?: string };
+  const contentType = response.headers.get("content-type") ?? "unknown";
+  const rawBody = await response.text();
+  let body: unknown;
+
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    const preview = rawBody.replace(/\s+/g, " ").slice(0, 160);
+    throw new Error(`Binance returned non-JSON from ${path}: HTTP ${response.status}, content-type ${contentType}, body starts with ${JSON.stringify(preview)}`);
+  }
+
   if (!response.ok) {
-    const message = typeof body === "object" && body && "msg" in body ? body.msg : undefined;
+    const message = typeof body === "object" && body !== null && "msg" in body && typeof body.msg === "string"
+      ? body.msg
+      : undefined;
     throw new Error(message || `Binance API request failed (${response.status}).`);
   }
+
   return body as T;
 }
 
