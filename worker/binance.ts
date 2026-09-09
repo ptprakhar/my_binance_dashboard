@@ -183,6 +183,67 @@ async function signedRequest<T>(
   return body as T;
 }
 
+async function publicRequest(baseUrl: string, path: string) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  const contentType = response.headers.get("content-type") ?? "unknown";
+  const rawBody = await response.text();
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    body = rawBody.replace(/\s+/g, " ").slice(0, 500);
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    contentType,
+    body: response.ok ? body : typeof body === "string" ? body : body,
+  };
+}
+
+async function probeSigned(env: Env, baseUrl: string, path: string) {
+  try {
+    const body = await signedRequest<unknown>(env, baseUrl, path);
+    return { ok: true, status: 200, body };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unexpected error." };
+  }
+}
+
+export async function getBinanceConnectivity(env: Env) {
+  const futuresBaseUrl = env.BINANCE_FUTURES_BASE_URL ?? DEFAULT_BASE_URL;
+
+  // Run independently and sequentially so one blocked upstream request cannot
+  // obscure the result of the others or look like a request burst to the edge.
+  const futuresPublicTime = await publicRequest(futuresBaseUrl, "/fapi/v1/time");
+  const generalPublicTime = await publicRequest(BINANCE_GENERAL_BASE_URL, "/api/v3/time");
+  const generalSigned = await probeSigned(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/apiRestrictions");
+  const futuresSignedAccount = await probeSigned(env, futuresBaseUrl, "/fapi/v2/account");
+  const futuresSignedPositions = await probeSigned(env, futuresBaseUrl, "/fapi/v2/positionRisk");
+
+  return {
+    deployment: "connectivity-diagnostic-v1",
+    tests: {
+      futuresPublicTime,
+      generalPublicTime,
+      generalSigned,
+      futuresSignedAccount,
+      futuresSignedPositions,
+    },
+    interpretation: {
+      "futuresPublicTime 200 + futures signed 403": "Futures edge is reachable, but the signed Futures request is being rejected; focus on authentication/signature/request handling or Futures-specific WAF policy.",
+      "futuresPublicTime 403": "The Worker-to-Futures Binance edge is blocked before a normal API response; this points toward upstream WAF/egress treatment rather than account permissions alone.",
+      "generalSigned 200 + futuresSignedAccount 403": "General Binance signed authentication works from the Worker, while the Futures edge/path rejects the signed request.",
+      "generalSigned 403": "General Binance signed requests are also being rejected from the Worker; this points toward a broader egress/WAF or signed-request issue.",
+    },
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export async function getBinanceReadAccess(env: Env) {
   const [permissions, accountInfo, accountStatus] = await Promise.all([
     signedRequest<BinanceApiRestrictions>(env, BINANCE_GENERAL_BASE_URL, "/sapi/v1/account/apiRestrictions"),
