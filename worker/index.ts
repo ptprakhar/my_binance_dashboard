@@ -1,4 +1,4 @@
-import { getBinanceConnectivity, getBinanceReadAccess, getFuturesSnapshot, type Env } from "./binance";
+import { getBinanceConnectivity, getBinanceReadAccess, getFuturesSnapshot, getRiskState, getRiskSymbol, type Env } from "./binance";
 
 const DEPLOY_MARKER = "cloudflare-direct-binance-v2";
 
@@ -79,6 +79,28 @@ export default {
         return json({ deployment: DEPLOY_MARKER, ...(await getFuturesSnapshot(env, startTime, endTime)) });
       } catch (error) {
         return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 502);
+      }
+    }
+
+    if (url.pathname === "/api/risk-state" && request.method === "GET") {
+      try {
+        if (!hasBinanceCredentials(env)) {
+          return json({ error: "Binance credentials are not configured on this Worker.", deployment: DEPLOY_MARKER }, 503);
+        }
+        const startTime = optionalTimestamp(url.searchParams.get("startTime"));
+        const endTime = optionalTimestamp(url.searchParams.get("endTime"));
+        return json({ deployment: DEPLOY_MARKER, ...(await getRiskState(env, startTime, endTime)) });
+      } catch (error) {
+        return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 502);
+      }
+    }
+
+    if (url.pathname === "/api/risk-symbol" && request.method === "GET") {
+      try {
+        const symbol = url.searchParams.get("symbol") ?? "";
+        return json({ deployment: DEPLOY_MARKER, ...(await getRiskSymbol(symbol)) });
+      } catch (error) {
+        return json({ error: errorMessage(error), deployment: DEPLOY_MARKER }, 400);
       }
     }
 
