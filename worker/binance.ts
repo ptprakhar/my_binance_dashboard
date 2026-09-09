@@ -70,16 +70,32 @@ function number(value: string | number | undefined): number {
 }
 
 function normalizePem(value: string): string {
-  return value.trim().replace(/\\n/g, "\n");
+  return value
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/\\n/g, "\n");
 }
 
 function pemToDer(pem: string): ArrayBuffer {
-  const normalized = normalizePem(pem)
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s+/g, "");
+  const normalized = normalizePem(pem);
+  const match = normalized.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
 
-  const binary = atob(normalized);
+  if (!match) {
+    throw new Error(
+      "BINANCE_ED25519_PRIVATE_KEY is not a PEM private key. Expected a PKCS#8 key beginning with -----BEGIN PRIVATE KEY-----.",
+    );
+  }
+
+  const base64 = match[2].replace(/[\s\uFEFF]/g, "");
+
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 !== 0) {
+    throw new Error(
+      `BINANCE_ED25519_PRIVATE_KEY contains invalid PEM base64 data. Check that the complete private-key block was pasted into the Worker secret, including BEGIN/END lines, with no extra characters.`,
+    );
+  }
+
+  const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
